@@ -3,7 +3,7 @@ Embedded Memory Allocator
 =========================
 This is C99 C implementation of a mempool. It should compile without any issues on most platforms.
 It might need some minor extensions (related to mutexes). If this will be the case, then a compile
-error will be triggered. It is provided as a C source and header files, so it can be integrated 
+error will be triggered. It is provided as C source and header files, so it can be integrated 
 within any project and build as needed.
 
 It is a bit similar in structure as the FAT file system. It stores the data in fixed size chunks 
