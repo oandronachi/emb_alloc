@@ -28,6 +28,14 @@
 #ifndef __EMB_ALLOC_PERFORMANCE_BENCHMARK_H__
 #define __EMB_ALLOC_PERFORMANCE_BENCHMARK_H__
 
+#include <stddef.h>
+
+/* Default workload scale used by the C++ default argument and by explicit 0.
+ * Define this before including the header to change the benchmark default. */
+#ifndef EMB_ALLOC_PERFORMANCE_BENCHMARK_DEFAULT_SCALE_MULTIPLIER
+#define EMB_ALLOC_PERFORMANCE_BENCHMARK_DEFAULT_SCALE_MULTIPLIER 1u
+#endif
+
 /**
  * Runs a simple malloc/free/realloc time performance benchmark.
  * ****************************************************************************
@@ -47,23 +55,22 @@
  * The project is available at https://github.com/SoftingIndustrial/MemPool.
  * @note If used in conjunction with RUN_KULMINAATOR_ALLOCATOR_COMPARISON, 
  *       then one mempool.c file needs to be renamed.
- * @note This mempool implementation proved to be quite slow in testing, so expect 
- *       quite a large run time. 
- * ****************************************************************************
- * If RUN_C_MEMPOOL_ALLOCATOR_COMPARISON is defined, 
- * then BasicIncludes.h, CMemoryPool.h, IMemoryBlock.h, SMemoryChunk.h and 
- * CMemoryPool.cpp must be made available as well.
- * The project is available at https://www.codeproject.com/Articles/15527/C-Memory-Pool.
- * @note This mempool implementation proved to be quite slow in testing, so expect 
+ * @note This mempool implementation proved to be quite slow in testing, so expect
  *       quite a large run time.
- * ****************************************************************************
- * @note When testing other mempools, the include files might need some adjustments 
+ * @note When testing other mempools, the include files might need some adjustments
  *       inside the external project files as well.
  * ****************************************************************************
- * @note If the other mempools headers are located in different relative paths, 
- *       then the includes inside emb_alloc_performance_benchmark.cpp must be 
+ * @note If the other mempools headers are located in different relative paths,
+ *       then the includes inside emb_alloc_performance_benchmark.cpp must be
  *       adjusted as well.
+ * @param scale_multiplier scales the initial pool sizes and the number of
+ *        allocation operations. Use 0 to select the configured default.
  */
-void EmbAllocRunPerformanceBenchmark ();
+#ifdef __cplusplus
+void EmbAllocRunPerformanceBenchmark (
+    size_t scale_multiplier = EMB_ALLOC_PERFORMANCE_BENCHMARK_DEFAULT_SCALE_MULTIPLIER);
+#else
+void EmbAllocRunPerformanceBenchmark (size_t scale_multiplier);
+#endif
 
 #endif /** __EMB_ALLOC_PERFORMANCE_BENCHMARK_H__ */

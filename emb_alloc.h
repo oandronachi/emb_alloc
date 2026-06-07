@@ -1,17 +1,17 @@
-/** 
+/**
  * Embedded Memory Allocator
  * Copyright (c) 2020, Ovidiu Andronachi <ovidiu.andronachi@gmail.com>
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -19,13 +19,13 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
- * 
- * 
+ *
+ *
  * https://en.wikipedia.org/wiki/MIT_License#License_terms
  */
 
-#ifndef __EMB_ALLOC_H__
-#define __EMB_ALLOC_H__
+#ifndef EMB_ALLOC_H
+#define EMB_ALLOC_H
 
 /** size_t, typedef, *printf, file and NULL declaration */
 #include <stdio.h>
@@ -61,7 +61,7 @@ typedef enum
     /** The mempool pointer does not point to a valid mempool. */
     kEmbAllocInvalidMempool,
     /** Could not allocate memory. */
-    kEmbAllocNoMemory, 
+    kEmbAllocNoMemory,
     /** Memory overflow detected. */
     kEmbAllocOverflow,
     /** Inconsistent mempool blocks detected. */
@@ -74,15 +74,24 @@ typedef enum
  * Error callback function pointer.
  * Used by the mempool owner to receive error data.
  * It is a method to provide a C alternative to C++ exceptions.
+ *
+ * @warning The callback is invoked SYNCHRONOUSLY from inside the EmbAlloc call that
+ *          raised the error, and for a threadsafe pool it runs while the pool's
+ *          internal mutex is held. The callback MUST NOT re-enter any EmbAlloc
+ *          function on the SAME pool (EmbAllocMalloc / EmbAllocFree / EmbAllocRealloc
+ *          / EmbAllocGetSettings / EmbAllocGetLastErrorCodeAndMessage / EmbAllocDestroy):
+ *          re-entering self-deadlocks a non-recursive mutex, and on a recursive mutex
+ *          mutates allocator metadata under a held lock (undefined behaviour). Keep it
+ *          short and non-re-entrant (e.g. copy/log the message and return).
  */
 typedef void (*EmbAllocErrorCallback) (EmbAllocErrors error_code, const char* error_message);
 
 /** EmbAlloc initialization settings. */
 typedef struct
 {
-    /** 
+    /**
      * The usable mempool size (in bytes).
-     * @note the total allocated memory is higher due to internal padding. 
+     * @note the total allocated memory is higher due to internal padding.
      */
     size_t total_size;
     /** The number of blocks that have an usable size of 32 bytes. */
@@ -101,18 +110,22 @@ typedef struct
     size_t num_2k_bytes_blocks;
     /** The number of blocks that have an usable size of 4 kB. */
     size_t num_4k_bytes_blocks;
-    /** The callback function pointer that will receive error notifications. */
+    /**
+     * The callback function pointer that will receive error notifications.
+     * @warning Must NOT re-enter any EmbAlloc function on this pool; see the
+     *          EmbAllocErrorCallback typedef for the full re-entrancy contract.
+     */
     EmbAllocErrorCallback error_callback_fn;
     /** Can be shared between threads without any issues. */
-    /** 
-     * @note If this flag is set, it is recommended to also 
+    /**
+     * @note If this flag is set, it is recommended to also
      *       define USE_WIN_CRITICAL_SECTION if compiling for Windows OS.
      * Not having this define, will use mutexes, which are quite slow
-     * when compared to critical sections. 
+     * when compared to critical sections.
      */
     bool threadsafe;
-    /** 
-     * Check ALL the block data (at allocation/deallocation) 
+    /**
+     * Check ALL the block data (at allocation/deallocation)
      * to detect if an overflow occured.
      */
     bool full_overflow_checks;
@@ -129,6 +142,25 @@ typedef struct
 /**
  * Mempool declaration.
  * The implementation is hidden from the user behind a void* pointer.
+ *
+ * @note THREADING & LIFETIME CONTRACT.
+ * A handle must be a value returned by EmbAllocCreate that has not yet been
+ * destroyed; passing any other pointer is undefined behaviour.
+ *
+ * For a threadsafe pool (EmbAllocMemPoolSettings::threadsafe == true), the calls
+ * EmbAllocMalloc / EmbAllocFree / EmbAllocRealloc / EmbAllocGetSettings /
+ * EmbAllocGetLastErrorCodeAndMessage MAY run concurrently from several threads on
+ * the SAME pool; they are serialized internally by the pool's mutex.
+ *
+ * EmbAllocDestroy is the one EXCLUSIVE operation: the caller must guarantee it does
+ * not run concurrently with any other call on that pool (including another
+ * EmbAllocDestroy) and that it happens-after every such call has returned. The
+ * pool's mutex and metadata live inside the buffer EmbAllocDestroy frees, so
+ * destroying a pool that is concurrently in use, or destroying it twice, is
+ * undefined behaviour (use-after-free / double-free) — exactly as for free() /
+ * fclose() / pthread_mutex_destroy(). Establishing this happens-before is the
+ * caller's responsibility (e.g. join all worker threads, or hold an external
+ * lifetime lock, before destroying the pool). See EmbAllocDestroy.
  */
 typedef void* EmbAllocMempool;
 
@@ -146,6 +178,15 @@ EmbAllocMempool EmbAllocCreate (const EmbAllocMemPoolSettings* settings);
  * @note Use error_callback_fn for extra details in case of error.
  * @param mempool allocated memory to be destroyed.
  * @return true if the mempool has been destroyed, false otherwise.
+ * @warning EXCLUSIVE, happens-after operation (see the EmbAllocMempool threading &
+ *          lifetime contract). The caller MUST ensure that no other call on this
+ *          pool (EmbAllocMalloc / EmbAllocFree / EmbAllocRealloc / EmbAllocGetSettings
+ *          / EmbAllocGetLastErrorCodeAndMessage, or another EmbAllocDestroy) is in
+ *          progress or begins concurrently, and that EmbAllocDestroy runs only after
+ *          all such calls have returned. The pool's mutex and metadata live in the
+ *          buffer this function frees, so destroying a pool that is concurrently in
+ *          use — or destroying it twice — is undefined behaviour (use-after-free /
+ *          double-free). This function does NOT provide that synchronization itself.
  */
 bool EmbAllocDestroy (EmbAllocMempool mempool);
 
@@ -157,10 +198,10 @@ bool EmbAllocDestroy (EmbAllocMempool mempool);
  * @param size number of bytes to br allocated.
  * @return the pointer to the beginning of newly allocated memory on success,
  *         NULL otherwise.
- * @warning The allocation function can only alloc within the same 
+ * @warning The allocation function can only alloc within the same
  *          category of memory blocks. If the mempool has memory blocks of 2 sizes
- *          (e.g. 128 and 256 bytes) and the required size does not fit into 
- *          continous block of one category, then the allocation will fail even if 
+ *          (e.g. 128 and 256 bytes) and the required size does not fit into
+ *          continous block of one category, then the allocation will fail even if
  *          the required size fits into the total ammount of free memory.
  * @see EmbAllocMemPoolSettings for more details on the memory blocks sizes.
  */
@@ -187,10 +228,10 @@ void EmbAllocFree (EmbAllocMempool mempool, void* ptr);
  * @param size number of bytes to reallocated.
  * @return the pointer to the beginning of newly allocated memory on success,
  *         NULL otherwise.
- * @warning The allocation function can only alloc within the same 
+ * @warning The allocation function can only alloc within the same
  *          category of memory blocks. If the mempool has memory blocks of 2 sizes
- *          (e.g. 128 and 256 bytes) and the required size does not fit into 
- *          continous block of one category, then the allocation will fail even if 
+ *          (e.g. 128 and 256 bytes) and the required size does not fit into
+ *          continous block of one category, then the allocation will fail even if
  *          the required size fits into the total ammount of free memory.
  * @see EmbAllocMemPoolSettings for more details on the memory blocks sizes.
  */
@@ -213,20 +254,17 @@ bool EmbAllocGetSettings (const EmbAllocMempool mempool, EmbAllocMemPoolSettings
  * Retrieves the error code set in the last function call
  * (kEmbAllocNoErr if the last call succeeded).
  * @param mempool the chuck that holds all pre-allocated memory.
- * @return a value from the EmbAllocErrors enum.
+ * @param code the output param that should hold the error code.
+ * @param message the output param that should hold the error message.
+ * @param message_len the size of the error message output param.
+ * @note This is threadsafe, but it is still a single slot that can get
+ * rewritten in multithreaded environments. It needs to be adjusted in future improvements.
+ * @return true if the last error message and code could be retrieved, false otherwise.
  */
-EmbAllocErrors EmbAllocGetLastErrorCode (EmbAllocMempool mempool);
-
-/**
- * Retrieves the error string set in the last function call
- * (an empty string if the last call succeeded).
- * @param mempool the chuck that holds all pre-allocated memory.
- * @return a null terminated string.
- */
-const char* EmbAllocGetLastErrorMessage (EmbAllocMempool mempool);
+bool EmbAllocGetLastErrorCodeAndMessage (EmbAllocMempool mempool, EmbAllocErrors *code, char *message, size_t message_len);
 
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
 
-#endif /* __EMB_ALLOC_H__ */
+#endif /* EMB_ALLOC_H */

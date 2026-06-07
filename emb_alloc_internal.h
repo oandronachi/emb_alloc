@@ -1,17 +1,17 @@
-/** 
+/**
  * Embedded Memory Allocator Internal Data Types and Defines
  * Copyright (c) 2020, Ovidiu Andronachi <ovidiu.andronachi@gmail.com>
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -19,8 +19,8 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
- * 
- * 
+ *
+ *
  * https://en.wikipedia.org/wiki/MIT_License#License_terms
  */
 
@@ -46,7 +46,7 @@ extern "C" {
 
 /**
  * https://mail.gnome.org/archives/gtk-devel-list/2004-December/msg00091.html
- * GNU libc alignment of 2 * sizeof(size_t).  
+ * GNU libc alignment of 2 * sizeof(size_t).
  * This is 16 bytes in the worst case scenarios (for 64 bit platforms).
  *
  */
@@ -86,86 +86,105 @@ extern "C" {
  * - settings
  * - blocks management
  * - auxiliary (thread mutex, error storage, similar to Linux errno)
- * 
+ *
  * The control data is split in 2:
- * - start marker, settings, blocks management and auxiliary 
- * (aligned and put in this order at the begining of the mempool, 
+ * - start marker, settings, blocks management and auxiliary
+ * (aligned and put in this order at the begining of the mempool,
  * before any memory blocks allocation)
- * - end marker (aligned and put at the end of the mempool, 
+ * - end marker (aligned and put at the end of the mempool,
  * after all memory blocks)
  */
 #define EMB_ALLOC_MEMPOOL_CONTROL_ALIGN_SIZE \
-    (2 * EMB_ALLOC_ALIGN_AMOUNT) + EMB_ALLOC_MEMPOOL_SETTINGS_ALIGN_SIZE + \
-    EMB_ALLOC_BLOCK_CATEGORY_ALIGN_SIZE + EMB_ALLOC_MEMPOOL_AUX_DATA_ALIGN_SIZE
+    ((2 * EMB_ALLOC_ALIGN_AMOUNT) + EMB_ALLOC_MEMPOOL_SETTINGS_ALIGN_SIZE + \
+    EMB_ALLOC_BLOCK_CATEGORY_ALIGN_SIZE + EMB_ALLOC_MEMPOOL_AUX_DATA_ALIGN_SIZE)
+
+/**
+ * The total aligned size in the mempool occupied by the control data
+ * w/o the aux one and the end marker
+ * - start marker
+ * - settings
+ * - blocks management
+ *
+ * The control data is split in 2:
+ * - start marker, settings, blocks management and auxiliary
+ * (aligned and put in this order at the begining of the mempool,
+ * before any memory blocks allocation)
+ * - end marker (aligned and put at the end of the mempool,
+ * after all memory blocks)
+ */
+#define EMB_ALLOC_MEMPOOL_NO_THREADSAFE_CONTROL_ALIGN_SIZE \
+    (EMB_ALLOC_ALIGN_AMOUNT + EMB_ALLOC_MEMPOOL_SETTINGS_ALIGN_SIZE + \
+    EMB_ALLOC_BLOCK_CATEGORY_ALIGN_SIZE)
 
 /**
  * The control sections of a block are the 2*EMB_ALLOC_ALIGN_AMOUNT
- * (start & end paddings) + (2 * sizeof (size_t)) 
+ * (start & end paddings) + (2 * sizeof (size_t))
  * (same as EMB_ALLOC_ALIGN_AMOUNT; for blocks usage and data size)
  */
 #define EMB_ALLOC_BLOCK_CONTROL_ALIGN_SIZE (3 * EMB_ALLOC_ALIGN_AMOUNT)
 
 /**
- * The control sections of a block are the 2*EMB_ALLOC_ALIGN_AMOUNT
- * (start & end paddings) + (2 * sizeof (size_t)) 
- * (same as EMB_ALLOC_ALIGN_AMOUNT; for blocks usage and data size)
+ * The size of the control region at the START of a block:
+ * EMB_ALLOC_ALIGN_AMOUNT (the block start padding marker) + (2 * sizeof (size_t))
+ * (same as EMB_ALLOC_ALIGN_AMOUNT; the block usage and data size counters).
+ * This is the leading block header only -- it does NOT include the end padding.
  */
 #define EMB_ALLOC_BLOCK_START_CONTROL_ALIGN_SIZE (2 * EMB_ALLOC_ALIGN_AMOUNT)
 
 /**
  * Retrieves the EmbAllocMemPoolSettings* associated with the mempool param.
- * Since this define is internal, its usage is restricted 
- * to the emb_alloc.c file alone. It should only be called after validating that the 
+ * Since this define is internal, its usage is restricted
+ * to the emb_alloc.c file alone. It should only be called after validating that the
  * mempool is ok (by comparing the start padding with kEmbAllocMempoolStart).
  * EMB_ALLOC_ALIGN_AMOUNT is the kEmbAllocMempoolStart size that is compared.
  */
 #define EMB_ALLOC_GET_MEMPOOL_SETTINGS_PTR(mempool) \
-    (EmbAllocMemPoolSettings*) ((unsigned char*) (mempool) + EMB_ALLOC_ALIGN_AMOUNT)
+    ((EmbAllocMemPoolSettings*) ((unsigned char*) (mempool) + EMB_ALLOC_ALIGN_AMOUNT))
 
 /**
- * Retrieves the EmbAllocMempoolAuxData* array associated with the mempool param.
- * Since this define is internal, its usage is restricted 
- * to the emb_alloc.c file alone. It should only be called after validating that the 
+ * Retrieves the EmbAllocBlockCategory* array associated with the mempool param.
+ * Since this define is internal, its usage is restricted
+ * to the emb_alloc.c file alone. It should only be called after validating that the
  * mempool is ok (by comparing the start padding with kEmbAllocMempoolStart).
  * EMB_ALLOC_ALIGN_AMOUNT is the kEmbAllocMempoolStart size that is compared.
  */
 #define EMB_ALLOC_GET_MEMPOOL_BLOCK_CATEGORIES_PTR(mempool) \
-    (EmbAllocBlockCategory*) ((unsigned char*) (mempool) + EMB_ALLOC_ALIGN_AMOUNT + \
-    EMB_ALLOC_MEMPOOL_SETTINGS_ALIGN_SIZE)
+    ((EmbAllocBlockCategory*) ((unsigned char*) (mempool) + EMB_ALLOC_ALIGN_AMOUNT + \
+    EMB_ALLOC_MEMPOOL_SETTINGS_ALIGN_SIZE))
 
 /**
  * Retrieves the EmbAllocMempoolAuxData* associated with the mempool param.
- * Since this define is internal, its usage is restricted 
- * to the emb_alloc.c file alone. It should only be called after validating that the 
+ * Since this define is internal, its usage is restricted
+ * to the emb_alloc.c file alone. It should only be called after validating that the
  * mempool is ok (by comparing the start padding with kEmbAllocMempoolStart).
  * EMB_ALLOC_ALIGN_AMOUNT is the kEmbAllocMempoolStart size that is compared.
  */
 #define EMB_ALLOC_GET_MEMPOOL_AUX_DATA_PTR(mempool) \
-    (EmbAllocMempoolAuxData*) ((unsigned char*) (mempool) + EMB_ALLOC_ALIGN_AMOUNT + \
-    EMB_ALLOC_MEMPOOL_SETTINGS_ALIGN_SIZE + EMB_ALLOC_BLOCK_CATEGORY_ALIGN_SIZE)
+    ((EmbAllocMempoolAuxData*) ((unsigned char*) (mempool) + EMB_ALLOC_ALIGN_AMOUNT + \
+    EMB_ALLOC_MEMPOOL_SETTINGS_ALIGN_SIZE + EMB_ALLOC_BLOCK_CATEGORY_ALIGN_SIZE))
 
 /**
  * Retrieves the first allocated block associated with the mempool param.
- * Since this define is internal, its usage is restricted 
- * to the emb_alloc.c file alone. It should only be called after validating that the 
+ * Since this define is internal, its usage is restricted
+ * to the emb_alloc.c file alone. It should only be called after validating that the
  * mempool is ok (by comparing the start padding with kEmbAllocMempoolStart).
  * EMB_ALLOC_ALIGN_AMOUNT is the kEmbAllocMempoolStart size that is compared.
  */
 #define EMB_ALLOC_GET_MEMPOOL_FIRST_BLOCK_PTR(mempool) \
-    (void*) ((unsigned char*) (mempool) + EMB_ALLOC_ALIGN_AMOUNT + \
+    ((void*) ((unsigned char*) (mempool) + EMB_ALLOC_ALIGN_AMOUNT + \
     EMB_ALLOC_MEMPOOL_SETTINGS_ALIGN_SIZE + EMB_ALLOC_BLOCK_CATEGORY_ALIGN_SIZE + \
-    EMB_ALLOC_MEMPOOL_AUX_DATA_ALIGN_SIZE)
+    EMB_ALLOC_MEMPOOL_AUX_DATA_ALIGN_SIZE))
 
 /**
  * This is the allocated size of a block.
  * It assumes that data_size is already aligned to EMB_ALLOC_ALIGN_AMOUNT.
- * If there will be "num_<size>_bytes_blocks" fields inside 
- * EmbAllocMemPoolSettings that are no aligned to EMB_ALLOC_ALIGN_AMOUNT, 
+ * If there will be "num_<size>_bytes_blocks" fields inside
+ * EmbAllocMemPoolSettings that are no aligned to EMB_ALLOC_ALIGN_AMOUNT,
  * then the entire allocation mechanism needs to be adjusted to account for this.
- * Furthermore, data_size will need to be aligned with EMB_ALLOC_ALIGN_SIZE and the 
- * EmbAllocSanitizeSettingsInternal needs to to a different kind of sanitization 
+ * Furthermore, data_size will need to be aligned with EMB_ALLOC_ALIGN_SIZE and the
+ * EmbAllocSanitizeSettingsInternal needs to to a different kind of sanitization
  * in regards to total_size.
- * Since this define is internal, its usage is restricted 
+ * Since this define is internal, its usage is restricted
  * to the emb_alloc.c file alone.
  */
 #define EMB_ALLOC_BLOCK_TOTAL_ALIGN_SIZE(data_size) \
@@ -173,112 +192,155 @@ extern "C" {
 
 /**
  * Retrieves the block start memory address from the raw pointer.
- * Since this define is internal, its usage is restricted 
+ * Since this define is internal, its usage is restricted
  * to the emb_alloc.c file alone.
  */
 #define EMB_ALLOC_GET_BLOCK_FROM_PTR(pointer) \
-    (void*) ((unsigned char*) (pointer) - \
-    (2 * EMB_ALLOC_ALIGN_AMOUNT /*block start padding, blocks usage and data size offset*/))
+    ((void*) ((unsigned char*) (pointer) - \
+    (2 * EMB_ALLOC_ALIGN_AMOUNT /*block start padding, blocks usage and data size offset*/)))
 
 /**
  * Retrieves the block usage counter from the raw pointer.
- * Since this define is internal, its usage is restricted 
+ * Since this define is internal, its usage is restricted
  * to the emb_alloc.c file alone.
  */
 #define EMB_ALLOC_GET_BLOCK_USE_COUNT_FROM_PTR(pointer) \
-    (size_t*) ((unsigned char*) (pointer) - \
-    (EMB_ALLOC_ALIGN_AMOUNT /*data size offset*/))
+    ((size_t*) ((unsigned char*) (pointer) - \
+    (EMB_ALLOC_ALIGN_AMOUNT /*data size offset*/)))
 
 /**
  * Retrieves the block used bytes from the raw pointer.
- * Since this define is internal, its usage is restricted 
+ * Since this define is internal, its usage is restricted
  * to the emb_alloc.c file alone.
  */
 #define EMB_ALLOC_GET_MEMORY_USE_COUNT_FROM_PTR(pointer) \
-    (size_t*) ((unsigned char*) (pointer) - \
-    sizeof(size_t)/*memory usage offset*/)
+    ((size_t*) ((unsigned char*) (pointer) - \
+    sizeof(size_t)/*memory usage offset*/))
 
 /**
  * Retrieves the raw pointer from the block start memory address.
  */
 #define EMB_ALLOC_GET_PTR_FROM_BLOCK(block) \
-    (void*) ((unsigned char*) (block) + \
-    (2 * EMB_ALLOC_ALIGN_AMOUNT /*block start padding, blocks usage and data size offset*/))
+    ((void*) ((unsigned char*) (block) + \
+    (2 * EMB_ALLOC_ALIGN_AMOUNT /*block start padding, blocks usage and data size offset*/)))
 
 /**
  * Retrieves the block usage counter from the block start memory address.
- * Since this define is internal, its usage is restricted 
+ * Since this define is internal, its usage is restricted
  * to the emb_alloc.c file alone.
  */
 #define EMB_ALLOC_GET_BLOCK_USE_COUNT_FROM_BLOCK(block) \
-    (size_t*) ((unsigned char*) (block) + \
-    (EMB_ALLOC_ALIGN_AMOUNT /*block start padding*/))
+    ((size_t*) ((unsigned char*) (block) + \
+    (EMB_ALLOC_ALIGN_AMOUNT /*block start padding*/)))
 
 /**
  * Retrieves the block used bytes from the block start memory address.
- * Since this define is internal, its usage is restricted 
+ * Since this define is internal, its usage is restricted
  * to the emb_alloc.c file alone.
  */
 #define EMB_ALLOC_GET_MEMORY_USE_COUNT_FROM_BLOCK(block) \
-    (size_t*) ((unsigned char*) (block) + \
-    (EMB_ALLOC_ALIGN_AMOUNT + sizeof(size_t)/*memory usage offset*/))
+    ((size_t*) ((unsigned char*) (block) + \
+    (EMB_ALLOC_ALIGN_AMOUNT + sizeof(size_t)/*memory usage offset*/)))
 
 /**
  * Retrieves the block end padding from the block start memory address.
- * Since this define is internal, its usage is restricted 
+ * Since this define is internal, its usage is restricted
  * to the emb_alloc.c file alone.
  */
 #define EMB_ALLOC_GET_END_PADDING_FROM_BLOCK(block, size) \
-    (void*) ((unsigned char*) (block) + \
-    (2 * EMB_ALLOC_ALIGN_AMOUNT /*block start padding and counters*/) + (size))
+    ((void*) ((unsigned char*) (block) + \
+    (2 * EMB_ALLOC_ALIGN_AMOUNT /*block start padding and counters*/) + (size)))
 
 /**
- * Checks whether the raw pointer is the memory start address of a block.
- * Since this define is internal, its usage is restricted 
- * to the emb_alloc.c file alone.
+ * Total number of data blocks across all 8 size categories in the settings.
  */
-#define EMB_ALLOC_PTR_IS_BLOCK(pointer, kEmbAllocBlockStart) \
-    (0 == memcmp (EMB_ALLOC_GET_BLOCK_FROM_PTR (pointer), \
-                (kEmbAllocBlockStart), EMB_ALLOC_ALIGN_AMOUNT))
+#define GET_TOTAL_NUM_BLOCKS_FROM_SETTINGS_PTR(settings) \
+    ((settings)->num_32_bytes_blocks + \
+    (settings)->num_64_bytes_blocks + \
+    (settings)->num_128_bytes_blocks + \
+    (settings)->num_256_bytes_blocks + \
+    (settings)->num_512_bytes_blocks + \
+    (settings)->num_1k_bytes_blocks + \
+    (settings)->num_2k_bytes_blocks + \
+    (settings)->num_4k_bytes_blocks)
+
+/**
+ * Total bytes of per-block control overhead (start/end padding + counters)
+ * across every block described by the settings.
+ */
+#define GET_TOTAL_BLOCKS_CONTROL_SIZE_FROM_SETTINGS_PTR(settings) \
+    (EMB_ALLOC_BLOCK_CONTROL_ALIGN_SIZE * GET_TOTAL_NUM_BLOCKS_FROM_SETTINGS_PTR(settings))
+
+/**
+ * Number of bytes needed for a category's out-of-band free bitmap that tracks
+ * `num_blocks` blocks at 1 bit per block (bit set == occupied, clear == free).
+ * Each category's slice is byte-aligned, so a block's index within its category
+ * maps directly to (byte, bit) with no cross-category bit packing.
+ * @note This bitmap is the AUTHORITATIVE free/occupied oracle. Free detection must
+ *       never be inferred from a block's in-band use_count slot: the inner blocks of
+ *       a multi-block allocation overlay user data on that slot, so user data equal
+ *       to EMB_ALLOC_VALUE_NOT_SET would otherwise masquerade as a free block and let
+ *       a scanner hand out an allocation overlapping live data.
+ */
+#define EMB_ALLOC_CATEGORY_BITMAP_BYTES(num_blocks) (((num_blocks) + 7u) / 8u)
+
+/**
+ * True if `pointer` lies within `mempool`'s data-block region.
+ */
+#define EMB_ALLOC_PTR_IS_IN_MEMPOOL(pointer, mempool, kEmbAllocMempoolStart) \
+    ((pointer) && (mempool) && \
+        EMB_ALLOC_PTR_IS_MEMPOOL((mempool), (kEmbAllocMempoolStart)) && \
+        ((uintptr_t)(pointer) >= (uintptr_t)EMB_ALLOC_GET_MEMPOOL_FIRST_BLOCK_PTR(mempool)) && \
+        ((size_t) ((uintptr_t)(pointer) - \
+                (uintptr_t)EMB_ALLOC_GET_MEMPOOL_FIRST_BLOCK_PTR(mempool))) \
+            < ((EMB_ALLOC_GET_MEMPOOL_SETTINGS_PTR(mempool))->total_size + \
+                GET_TOTAL_BLOCKS_CONTROL_SIZE_FROM_SETTINGS_PTR( \
+                    EMB_ALLOC_GET_MEMPOOL_SETTINGS_PTR(mempool))))
 
 /**
  * Retrieves the mempool associated with the EmbAllocMemPoolSettings param.
- * Since this define is internal, its usage is restricted 
+ * Since this define is internal, its usage is restricted
  * to the emb_alloc.c file alone.
  */
 #define EMB_ALLOC_GET_MEMPOOL_FROM_SETTINGS_PTR(settings) \
-    (void*) ((unsigned char*) (settings) - EMB_ALLOC_ALIGN_AMOUNT)
+    ((void*) ((unsigned char*) (settings) - EMB_ALLOC_ALIGN_AMOUNT))
 
 /**
  * Retrieves the mempool associated with the EmbAllocBlockCategory param.
- * Since this define is internal, its usage is restricted 
+ * Since this define is internal, its usage is restricted
  * to the emb_alloc.c file alone.
  */
 #define EMB_ALLOC_GET_MEMPOOL_FROM_BLOCK_CATEGORIES_PTR(categories) \
-    (void*) ((unsigned char*) (categories) - EMB_ALLOC_ALIGN_AMOUNT - \
-    EMB_ALLOC_MEMPOOL_SETTINGS_ALIGN_SIZE)
+    ((void*) ((unsigned char*) (categories) - EMB_ALLOC_ALIGN_AMOUNT - \
+    EMB_ALLOC_MEMPOOL_SETTINGS_ALIGN_SIZE))
 
 /**
  * Retrieves the mempool associated with the EmbAllocMempoolAuxData param.
- * Since this define is internal, its usage is restricted 
+ * Since this define is internal, its usage is restricted
  * to the emb_alloc.c file alone.
  */
 #define EMB_ALLOC_GET_MEMPOOL_FROM_AUX_DATA_PTR(aux_data) \
-    (void*) ((unsigned char*) (aux_data) - EMB_ALLOC_ALIGN_AMOUNT - \
-    EMB_ALLOC_MEMPOOL_SETTINGS_ALIGN_SIZE - EMB_ALLOC_BLOCK_CATEGORY_ALIGN_SIZE)
+    ((void*) ((unsigned char*) (aux_data) - EMB_ALLOC_ALIGN_AMOUNT - \
+    EMB_ALLOC_MEMPOOL_SETTINGS_ALIGN_SIZE - EMB_ALLOC_BLOCK_CATEGORY_ALIGN_SIZE))
 
 /**
  * Checks whether the raw pointer is the memory start address of a mempool.
- * Since this define is internal, its usage is restricted 
+ * Since this define is internal, its usage is restricted
  * to the emb_alloc.c file alone.
+ * @note This is a best effort case without keeping track internally of
+ * the mempools created and destroyed. The user bares responsibility of
+ * providing the right pointer (the bare minimum would be to point to
+ * an accessible memory location).
  */
 #define EMB_ALLOC_PTR_IS_MEMPOOL(pointer, kEmbAllocMempoolStart) \
-    (0 == memcmp ((pointer), (kEmbAllocMempoolStart), EMB_ALLOC_ALIGN_AMOUNT))
+    ((pointer) && \
+     (0 == ((uintptr_t)(pointer) & (EMB_ALLOC_ALIGN_AMOUNT - 1))) && \
+     (0 == memcmp ((pointer), (kEmbAllocMempoolStart), EMB_ALLOC_ALIGN_AMOUNT)))
 
 /**
- * Determines whether a certain memory size can be allocated 
+ * Determines whether a certain memory size can be allocated
  * in a single block of the param category.
- * Since this define is internal, its usage is restricted 
+ * Since this define is internal, its usage is restricted
  * to the emb_alloc.c file alone.
  */
 #define EMB_ALLOC_CAN_ALLOC_IN_A_BLOCK(category, size) \
@@ -299,15 +361,33 @@ typedef struct {
     size_t block_data_size;
     /** The total number allocated of blocks. */
     size_t total_blocks;
-    /** The number of available allocated blocks. */
+    /** The number of occupied (in-use) blocks; the free count is total_blocks - occupied_blocks. */
     size_t occupied_blocks;
+    /**
+     * Out-of-band free bitmap for this category: 1 bit per block (set == occupied,
+     * clear == free), EMB_ALLOC_CATEGORY_BITMAP_BYTES(total_blocks) bytes, byte-aligned.
+     * Points into a region the mempool reserves after the data blocks. This is the
+     * AUTHORITATIVE free/occupied oracle; scanners must consult it rather than reading
+     * a block's use_count slot (which is user data for multi-block inner blocks).
+     * NULL only for an empty category (total_blocks == 0).
+     */
+    void* free_bitmap;
+    /**
+     * Out-of-band allocation-start bitmap for this category: 1 bit per block, set
+     * iff the block is the FIRST (head) block of a live allocation. Same size and
+     * layout as free_bitmap, laid out immediately after it. The validator
+     * (EmbAllocGetCategoryForPtr) requires this bit before accepting a Free/Realloc,
+     * so a forged inner-block header (inner-block headers are user-writable payload)
+     * cannot masquerade as an allocation head. NULL only for an empty category.
+     */
+    void* alloc_start_bitmap;
 } EmbAllocBlockCategory;
 
 /** Auxiliary data structure for handling multithreading and errors in the mempool */
 typedef struct {
     /** OS generic mutex used for thread synchronization. */
     EmbAllocMutex thread_sync_mutex;
-    /** 
+    /**
      * Bool flag to mark that the thread sync mutex can be used.
      * It will be set to true when the EmbAllocMemPoolSettings.threadsafe is true
      * and the thread_sync_mutex has been initialized successfully.
@@ -329,12 +409,13 @@ typedef struct {
 #define EMB_ALLOC_OVERFLOW_ERROR "Memory overflow detected."
 #define EMB_ALLOC_BLOCK_INCONSISTENCY_ERROR "Inconsistency found in the data blocks management section."
 #define EMB_ALLOC_INVALID_OUTPUT_PARAM_ERROR "Invalid output parameter."
+#define EMB_ALLOC_MUTEX_CREATE_ERROR "Could not create the threadsync mutex."
 #define EMB_ALLOC_MUTEX_LOCK_ERROR "Could not lock the threadsync mutex."
 #define EMB_ALLOC_MUTEX_UNLOCK_ERROR "Could not unlock the threadsync mutex."
 #define EMB_ALLOC_MUTEX_DESTROY_ERROR "Could not destroy the threadsync mutex."
 #define EMB_ALLOC_INVALID_POINTER_PARAM_ERROR "Invalid pointer input parameter."
 
-#define EMB_ALLOC_MEMORY_LOCATION_ERROR_FORMAT "(at the 0x%p location / %ld mempool offset)"
+#define EMB_ALLOC_MEMORY_LOCATION_ERROR_FORMAT "(at the 0x%p location / %zu mempool offset)"
 
 #ifdef __cplusplus
 }
