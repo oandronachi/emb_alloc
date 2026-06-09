@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.compiler }}
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler: GCC
+            cc: gcc
+          - compiler: Clang
+            cc: clang
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v6
+
+      - name: Build self-test
+        run: |
+          ${{ matrix.cc }} -std=c99 -Wall -Wextra \
+            emb_alloc.c emb_alloc_util.c emb_alloc_test.c \
+            -pthread -o emb_alloc_test
+
+      - name: Run self-test
+        run: ./emb_alloc_test

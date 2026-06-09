@@ -1,4 +1,7 @@
 # emb_alloc
+
+[![CI](https://github.com/oandronachi/emb_alloc/actions/workflows/ci.yml/badge.svg)](https://github.com/oandronachi/emb_alloc/actions/workflows/ci.yml)
+
 Embedded Memory Allocator
 =========================
 This is a C99 C implementation of a mempool. It should compile without any issues on most platforms.
